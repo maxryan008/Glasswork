@@ -1,86 +1,89 @@
 package dev.maximus.glasswork.client.internal.mixin;
 
+import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.vertex.*;
 import dev.maximus.glasswork.api.GlassworkAPI;
 import dev.maximus.glasswork.api.InjectedQuad;
 import dev.maximus.glasswork.api.QuadVertex;
 import dev.maximus.glasswork.client.internal.mesh.TranslucentMeshStore;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import net.minecraft.client.Camera;
-import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import org.joml.Matrix4f;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.util.List;
 import java.util.Map;
 
 @Mixin(net.minecraft.client.renderer.LevelRenderer.class)
 public class LevelRendererMixin {
+    @Shadow @Final private Minecraft minecraft;
+    @Shadow @Final private ObjectArrayList<SectionRenderDispatcher.RenderSection> visibleSections;
 
-    @Shadow
-    @Final
-    private Minecraft minecraft;
+    @Redirect(
+            method = "renderSectionLayer(Lnet/minecraft/client/renderer/RenderType;DDDLorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher$CompiledSection;isEmpty(Lnet/minecraft/client/renderer/RenderType;)Z"
+            )
+    )
+    private boolean glasswork$overrideIsEmpty(SectionRenderDispatcher.CompiledSection compiled,
+                                              RenderType layer,
+                                              @Local SectionRenderDispatcher.RenderSection section) {
+        boolean vanillaEmpty = !((CompiledSectionAccessor) compiled).getHasBlocks().contains(layer);
 
-    @Shadow
-    @Final
-    private ObjectArrayList<SectionRenderDispatcher.RenderSection> visibleSections;
+        if (layer != RenderType.translucent() || !vanillaEmpty || section == null) {
+            return vanillaEmpty;
+        }
 
-    @Inject(method = "renderLevel", at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/LevelRenderer;renderSectionLayer(Lnet/minecraft/client/renderer/RenderType;DDDLorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
-            shift = At.Shift.BEFORE
-    ))
-    private void glasswork$inject(
-            DeltaTracker tickCounter,
-            boolean renderOutline,
-            Camera camera,
-            GameRenderer renderer,
-            LightTexture lightmap,
-            Matrix4f projection,
-            Matrix4f viewMatrix,
-            CallbackInfo ci
-    ) {
-        if (this.minecraft.level == null) return;
+        SectionPos sec = SectionPos.of(section.getOrigin());
+        boolean haveQuads = !GlassworkAPI._getQuads(sec).isEmpty();
 
-        SectionRenderDispatcher dispatcher = this.minecraft.levelRenderer.getSectionRenderDispatcher();
-        var cameraPos = camera.getPosition();
+        return !haveQuads;
+    }
 
-        for (SectionRenderDispatcher.RenderSection section : List.copyOf(this.visibleSections)) {
-            BlockPos origin = section.getOrigin();
-            SectionPos sectionPos = SectionPos.of(origin);
+    @Redirect(
+            method = "renderSectionLayer(Lnet/minecraft/client/renderer/RenderType;DDDLorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection;getBuffer(Lnet/minecraft/client/renderer/RenderType;)Lcom/mojang/blaze3d/vertex/VertexBuffer;"
+            )
+    )
+    private VertexBuffer glasswork$redirectGetBuffer(SectionRenderDispatcher.RenderSection section, RenderType layer) {
+        if (layer != RenderType.translucent()) {
+            return (VertexBuffer) ((RenderSectionAccessor) section).getBufferMap().get(layer);
+        }
 
-            List<InjectedQuad> quads = GlassworkAPI._getQuads(sectionPos);
+        if (this.minecraft.level == null) {
+            return (VertexBuffer) ((RenderSectionAccessor) section).getBufferMap().get(layer);
+        }
 
-            if (quads.isEmpty() || !GlassworkAPI._needsUpload(sectionPos)) {
-                continue;
-            }
+        final BlockPos origin = section.getOrigin();
+        final SectionPos sectionPos = SectionPos.of(origin);
 
-            TranslucentMeshStore.TrackedMesh tracked = TranslucentMeshStore.get(origin);
+        final List<InjectedQuad> quads = GlassworkAPI._getQuads(sectionPos);
+        if (!quads.isEmpty() && GlassworkAPI._needsUpload(sectionPos)) {
+            final TranslucentMeshStore.TrackedMesh tracked = TranslucentMeshStore.get(origin);
 
-            VertexFormat format = (tracked != null) ? tracked.mesh().drawState().format() : DefaultVertexFormat.BLOCK;
-            VertexFormat.Mode mode = (tracked != null) ? tracked.mesh().drawState().mode()   : VertexFormat.Mode.QUADS;
+            final VertexFormat format = (tracked != null) ? tracked.mesh().drawState().format() : DefaultVertexFormat.BLOCK;
+            final VertexFormat.Mode mode = (tracked != null) ? tracked.mesh().drawState().mode()   : VertexFormat.Mode.QUADS;
 
-            int estimate = Math.max(1024, quads.size() * 4 * format.getVertexSize());
-            ByteBufferBuilder bytes = new ByteBufferBuilder(estimate);
-            BufferBuilder builder = new BufferBuilder(bytes, mode, format);
+            final int estimate = Math.max(1024, quads.size() * 4 * format.getVertexSize());
+            final ByteBufferBuilder bytes = new ByteBufferBuilder(estimate);
+            final BufferBuilder builder   = new BufferBuilder(bytes, mode, format);
 
             MeshData injected = null;
             try {
-                for (var q : quads) {
-                    var vs = new QuadVertex[]{ q.v1(), q.v2(), q.v3(), q.v4() };
-                    for (var v : vs) {
+                for (InjectedQuad q : quads) {
+                    QuadVertex[] vs = { q.v1(), q.v2(), q.v3(), q.v4() };
+                    for (QuadVertex v : vs) {
                         builder.addVertex(v.x() - origin.getX(), v.y() - origin.getY(), v.z() - origin.getZ())
                                 .setColor(v.color())
                                 .setUv(v.u(), v.v())
@@ -92,48 +95,45 @@ public class LevelRendererMixin {
                 injected = builder.buildOrThrow();
             } catch (Exception e) {
                 bytes.close();
-                continue;
+                injected = null;
             }
 
-            TranslucentMeshStore.TrackedMesh mergedTracked = TranslucentMeshStore.merge(tracked, injected);
-            MeshData merged = mergedTracked.mesh();
+            if (injected != null) {
+                final TranslucentMeshStore.TrackedMesh mergedTracked =
+                        TranslucentMeshStore.merge(tracked, injected);
+                final MeshData merged = mergedTracked.mesh();
 
-            var fixed = ((SectionRenderDispatcherAccessor) dispatcher).getFixedBuffers();
-            MeshData.SortState sortState = merged.sortQuads(
-                    fixed.buffer(RenderType.translucent()),
-                    VertexSorting.byDistance(
-                            (float) (cameraPos.x - origin.getX()),
-                            (float) (cameraPos.y - origin.getY()),
-                            (float) (cameraPos.z - origin.getZ())
-                    )
-            );
+                final SectionRenderDispatcher dispatcher = this.minecraft.levelRenderer.getSectionRenderDispatcher();
+                final var fixed = ((SectionRenderDispatcherAccessor) dispatcher).getFixedBuffers();
+                final Vec3 cam = this.minecraft.gameRenderer.getMainCamera().getPosition();
 
-            Map<RenderType, VertexBuffer> map = ((RenderSectionAccessor) section).getBufferMap();
-            Object old = map.get(RenderType.translucent());
-            VertexBuffer vbo = (old instanceof VertexBuffer vb) ? vb : new VertexBuffer(VertexBuffer.Usage.STATIC);
+                merged.sortQuads(
+                        fixed.buffer(RenderType.translucent()),
+                        VertexSorting.byDistance(
+                                (float) (cam.x - origin.getX()),
+                                (float) (cam.y - origin.getY()),
+                                (float) (cam.z - origin.getZ())
+                        )
+                );
 
-            vbo.bind();
-            vbo.upload(merged);
-            VertexBuffer.unbind();
+                final Map<RenderType, VertexBuffer> map = ((RenderSectionAccessor) section).getBufferMap();
+                VertexBuffer vbo = map.get(RenderType.translucent());
+                if (vbo == null) vbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
-            if (!(old instanceof VertexBuffer)) {
-                map.put(RenderType.translucent(), vbo);
+                vbo.bind();
+                vbo.upload(merged);
+                VertexBuffer.unbind();
+
+                if (map.get(RenderType.translucent()) == null) {
+                    map.put(RenderType.translucent(), vbo);
+                }
+
+                GlassworkAPI._markUploaded(sectionPos);
+                injected.close();
+                mergedTracked.close();
             }
-
-            SectionRenderDispatcher.CompiledSection compiled = section.getCompiled();
-            if (((CompiledSectionAccessor) compiled).getHasBlocks().isEmpty()) {
-                SectionRenderDispatcher.CompiledSection fresh = new SectionRenderDispatcher.CompiledSection();
-                ((RenderSectionAccessor) section).invokeSetCompiled(fresh);
-                compiled = fresh;
-            }
-            if (map.get(RenderType.translucent()) instanceof VertexBuffer) {
-                ((CompiledSectionAccessor) compiled).getHasBlocks().add(RenderType.translucent());
-                ((CompiledSectionAccessor) compiled).setTransparencyState(sortState);
-            }
-
-            GlassworkAPI._markUploaded(sectionPos);
-            if (injected != null) injected.close();
-            mergedTracked.close();
         }
+
+        return (VertexBuffer) ((RenderSectionAccessor) section).getBufferMap().get(layer);
     }
 }
