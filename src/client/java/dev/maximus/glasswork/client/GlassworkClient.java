@@ -26,20 +26,5 @@ public class GlassworkClient implements ClientModInitializer {
             GlassworkAPI._internalClearAll();
             TranslucentMeshStore.clearAll();
         });
-        ClientTickEvents.START_CLIENT_TICK.register(client -> {
-            pushMyQuads(client.level, SectionPos.of(BlockPos.ZERO));
-        });
-
     }
-
-    void pushMyQuads(Level level, SectionPos sec) {
-        var q = new InjectedQuad(
-                new QuadVertex(0,0,0, 0,0, 0x8000CCFF, 0x00F000F0, 0, 0,1,0),
-                new QuadVertex(1,0,0, 1F,0, 0x8000CCFF, 0x00F000F0, 0, 0,1,0),
-                new QuadVertex(1,1,0, 1F,1F, 0x8000CCFF, 0x00F000F0, 0, 0,1,0),
-                new QuadVertex(0,1,0, 0,1F, 0x8000CCFF, 0x00F000F0, 0, 0,1,0)
-        );
-        GlassworkAPI.put(level, sec, java.util.List.of(q));
-    }
-
 }
