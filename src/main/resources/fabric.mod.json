@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "glasswork",
+  "version": "${version}",
+  "name": "Glasswork",
+  "description": "Section-layer translucent quad injection API.",
+  "authors": ["maxryan008"],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/glasswork/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "dev.maximus.glasswork.client.GlassworkDataGenerator"
+    ],
+    "client": [
+      "dev.maximus.glasswork.client.GlassworkClient"
+    ],
+    "main": [
+      "dev.maximus.glasswork.Glasswork"
+    ]
+  },
+  "mixins": [
+    "glasswork.mixins.json",
+    {
+      "config": "glasswork.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

@@ -1,0 +1,103 @@
+package dev.maximus.glasswork.client.internal.mesh;
+
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.core.BlockPos;
+import org.lwjgl.system.MemoryUtil;
+
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public final class TranslucentMeshStore {
+    public static final class TrackedMesh {
+        private final MeshData mesh;
+        private final ByteBufferBuilder builder; // may be null if wrapping foreign data
+
+        public TrackedMesh(MeshData mesh, ByteBufferBuilder builder) {
+            this.mesh = mesh;
+            this.builder = builder;
+        }
+        public MeshData mesh() { return mesh; }
+        public void close() { if (builder != null) builder.close(); }
+    }
+
+    private static final Map<BlockPos, TrackedMesh> STORE = new ConcurrentHashMap<>();
+
+    private TranslucentMeshStore() {}
+
+    /** Clone vanilla translucent mesh so we own its memory. */
+    public static void storeOrRemove(BlockPos origin, MeshData mesh) {
+        BlockPos key = origin.immutable();
+        TrackedMesh old = STORE.remove(key);
+        if (old != null) old.close();
+
+        if (mesh == null) return;
+
+        ByteBuffer src = mesh.vertexBuffer();
+        int size = src.remaining();
+
+        ByteBufferBuilder builder = new ByteBufferBuilder(size);
+        long dest = builder.reserve(size);
+        MemoryUtil.memCopy(MemoryUtil.memAddress(src), dest, size);
+
+        MeshData.DrawState d = mesh.drawState();
+        MeshData copy = new MeshData(builder.build(), new MeshData.DrawState(
+                d.format(), d.vertexCount(), d.indexCount(), d.mode(), d.indexType()
+        ));
+        STORE.put(key, new TrackedMesh(copy, builder));
+    }
+
+    public static TrackedMesh get(BlockPos origin) {
+        return STORE.get(origin);
+    }
+
+    public static void clear(BlockPos origin) {
+        TrackedMesh t = STORE.remove(origin.immutable());
+        if (t != null) t.close();
+    }
+
+    public static void clearAll() {
+        STORE.values().forEach(TrackedMesh::close);
+        STORE.clear();
+    }
+
+    /** Merge two meshes with identical format/mode. Returns new tracked mesh (caller must close). */
+    public static TrackedMesh merge(TrackedMesh a, MeshData b) {
+        if (a == null) return new TrackedMesh(b, null);
+
+        MeshData am = a.mesh();
+        MeshData.DrawState ad = am.drawState();
+        MeshData.DrawState bd = b.drawState();
+
+        VertexFormat format = ad.format();
+        if (!format.equals(bd.format())) throw new IllegalStateException("Vertex formats differ");
+        if (ad.mode() != bd.mode()) throw new IllegalStateException("Vertex modes differ");
+
+        int vertexSize = format.getVertexSize();
+        int aVerts = ad.vertexCount();
+        int bVerts = bd.vertexCount();
+        int aBytes = aVerts * vertexSize;
+        int bBytes = bVerts * vertexSize;
+
+        ByteBuffer abuf = am.vertexBuffer();
+        ByteBuffer bbuf = b.vertexBuffer();
+        if (abuf.remaining() < aBytes || bbuf.remaining() < bBytes) throw new IllegalStateException("Insufficient buffer data");
+
+        ByteBufferBuilder builder = new ByteBufferBuilder(aBytes + bBytes);
+        long dest = builder.reserve(aBytes + bBytes);
+        MemoryUtil.memCopy(MemoryUtil.memAddress(abuf), dest, aBytes);
+        MemoryUtil.memCopy(MemoryUtil.memAddress(bbuf), dest + aBytes, bBytes);
+
+        MeshData.DrawState mergedDraw = new MeshData.DrawState(
+                format,
+                aVerts + bVerts,
+                ad.indexCount() + (bVerts / 4 * 6), // nominal index count for quads
+                ad.mode(),
+                ad.indexType()
+        );
+
+        return new TrackedMesh(new MeshData(builder.build(), mergedDraw), builder);
+    }
+}
