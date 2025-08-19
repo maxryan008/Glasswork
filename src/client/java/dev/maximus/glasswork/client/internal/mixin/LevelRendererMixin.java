@@ -61,11 +61,12 @@ public class LevelRendererMixin {
             BlockPos origin = section.getOrigin();
             SectionPos sectionPos = SectionPos.of(origin);
 
-            // Skip if no changes
             List<InjectedQuad> quads = GlassworkAPI._getQuads(sectionPos);
-            if (quads.isEmpty() || !GlassworkAPI._needsUpload(sectionPos)) continue;
 
-            // Merge base (vanilla translucent) + injected
+            if (quads.isEmpty() || !GlassworkAPI._needsUpload(sectionPos)) {
+                continue;
+            }
+
             TranslucentMeshStore.TrackedMesh tracked = TranslucentMeshStore.get(origin);
 
             VertexFormat format = (tracked != null) ? tracked.mesh().drawState().format() : DefaultVertexFormat.BLOCK;
@@ -77,9 +78,9 @@ public class LevelRendererMixin {
 
             MeshData injected = null;
             try {
-                for (InjectedQuad q : quads) {
-                    QuadVertex[] vs = { q.v1(), q.v2(), q.v3(), q.v4() };
-                    for (QuadVertex v : vs) {
+                for (var q : quads) {
+                    var vs = new QuadVertex[]{ q.v1(), q.v2(), q.v3(), q.v4() };
+                    for (var v : vs) {
                         builder.addVertex(v.x() - origin.getX(), v.y() - origin.getY(), v.z() - origin.getZ())
                                 .setColor(v.color())
                                 .setUv(v.u(), v.v())
@@ -90,7 +91,6 @@ public class LevelRendererMixin {
                 }
                 injected = builder.buildOrThrow();
             } catch (Exception e) {
-                // Prevent leak on failure
                 bytes.close();
                 continue;
             }
@@ -98,7 +98,6 @@ public class LevelRendererMixin {
             TranslucentMeshStore.TrackedMesh mergedTracked = TranslucentMeshStore.merge(tracked, injected);
             MeshData merged = mergedTracked.mesh();
 
-            // Sort relative to section origin and camera
             var fixed = ((SectionRenderDispatcherAccessor) dispatcher).getFixedBuffers();
             MeshData.SortState sortState = merged.sortQuads(
                     fixed.buffer(RenderType.translucent()),
@@ -109,7 +108,6 @@ public class LevelRendererMixin {
                     )
             );
 
-            // Upload to section translucent VBO
             Map<RenderType, VertexBuffer> map = ((RenderSectionAccessor) section).getBufferMap();
             Object old = map.get(RenderType.translucent());
             VertexBuffer vbo = (old instanceof VertexBuffer vb) ? vb : new VertexBuffer(VertexBuffer.Usage.STATIC);
@@ -122,24 +120,20 @@ public class LevelRendererMixin {
                 map.put(RenderType.translucent(), vbo);
             }
 
-            // Ensure compiled flags
             SectionRenderDispatcher.CompiledSection compiled = section.getCompiled();
             if (((CompiledSectionAccessor) compiled).getHasBlocks().isEmpty()) {
                 SectionRenderDispatcher.CompiledSection fresh = new SectionRenderDispatcher.CompiledSection();
                 ((RenderSectionAccessor) section).invokeSetCompiled(fresh);
                 compiled = fresh;
             }
-            if (((RenderSectionAccessor) section).getBufferMap().get(RenderType.translucent()) instanceof VertexBuffer) {
+            if (map.get(RenderType.translucent()) instanceof VertexBuffer) {
                 ((CompiledSectionAccessor) compiled).getHasBlocks().add(RenderType.translucent());
                 ((CompiledSectionAccessor) compiled).setTransparencyState(sortState);
             }
 
-            // Mark uploaded and close temps
             GlassworkAPI._markUploaded(sectionPos);
-            if (injected != null) injected.close(); // IMPORTANT: free temp
-            mergedTracked.close();                   // free merged builder (keeps vanilla tracked mesh untouched)
+            if (injected != null) injected.close();
+            mergedTracked.close();
         }
-
-        // Note: a future "global overlay" draw pass can be added here if desired.
     }
 }

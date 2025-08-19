@@ -8,22 +8,22 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Public API for submitting translucent quads into world sections.
- * Call from the client thread.
- */
 public final class GlassworkAPI {
     private GlassworkAPI() {}
 
-    // Per-section persistent quads
     private static final Map<SectionPos, List<InjectedQuad>> QUADS = new ConcurrentHashMap<>();
+
     private static final Map<SectionPos, Integer> VER = new ConcurrentHashMap<>();
+
     private static final Map<SectionPos, Integer> LAST_UP = new ConcurrentHashMap<>();
 
-    // Per-frame world-space overlay (optional future use)
     private static final Queue<InjectedQuad> FRAME = new ConcurrentLinkedQueue<>();
 
-    /** Replace quads for a section. Pass empty/null to remove. */
+    /* ===========================
+       Public API (stable)
+       =========================== */
+
+    /** Replace quads for a section (persistent until removeAll). */
     public static void put(Level level, SectionPos section, Collection<InjectedQuad> quads) {
         if (section == null) return;
         if (quads == null || quads.isEmpty()) {
@@ -31,43 +31,56 @@ public final class GlassworkAPI {
             return;
         }
         QUADS.put(section, List.copyOf(quads));
-        VER.merge(section, 1, (a, b) -> (a + b) & 0x7fffffff);
+        _bumpGeneration(section);
     }
 
-    /** Remove all custom quads in a section. */
+    /** Remove all user quads in a section. */
     public static void removeAll(Level level, SectionPos section) {
+        if (section == null) return;
         QUADS.remove(section);
         VER.remove(section);
         LAST_UP.remove(section);
     }
 
-    /** Convenience. */
+    /** Convenience to compute section from block pos. */
     public static SectionPos sectionFor(BlockPos pos) {
         return SectionPos.of(pos);
     }
 
-    // ---------- INTERNAL (used by mixins) ----------
+    public static void submitFrameQuad(InjectedQuad quad) {
+        if (quad != null) FRAME.add(quad);
+    }
 
+    /* ===========================
+       INTERNAL (used by mixins)
+       =========================== */
+
+    /** Get current persistent quads (never null). */
     public static List<InjectedQuad> _getQuads(SectionPos section) {
         return QUADS.getOrDefault(section, Collections.emptyList());
     }
 
+    /** Has this section changed (or been bumped) since last upload? */
     public static boolean _needsUpload(SectionPos section) {
-        return !Objects.equals(VER.get(section), LAST_UP.get(section));
+        return !Objects.equals(VER.get(section), LAST_UP.get(section)) && !_getQuads(section).isEmpty();
     }
 
+    /** Stamp "uploaded now". */
     public static void _markUploaded(SectionPos section) {
         LAST_UP.put(section, VER.getOrDefault(section, 0));
     }
 
-    /** Called when a section gets dirty/unloaded. */
-    public static void _clearSection(SectionPos section) {
-        removeAll(null, section);
+    /** Force a re-upload next frame without touching user data. */
+    public static void _bumpGeneration(SectionPos section) {
+        VER.merge(section, 1, (a, b) -> (a + b) & 0x7fffffff);
     }
 
-    /** Submit a world-space quad for just this frame (optional overlay path). */
-    public static void submitFrameQuad(InjectedQuad quad) {
-        if (quad != null) FRAME.add(quad);
+    /**
+     * On section dirty: DO NOT remove user quads.
+     * Only forget last upload stamp so we re-upload as soon as possible.
+     */
+    public static void _clearSection(SectionPos section) {
+        LAST_UP.remove(section);
     }
 
     public static List<InjectedQuad> _drainFrameQuads() {
@@ -76,8 +89,11 @@ public final class GlassworkAPI {
         return out;
     }
 
-    /** Clear all API storage (disconnect/shutdown). */
+    /** Global cleanup on disconnect/exit. */
     public static void _internalClearAll() {
-        QUADS.clear(); VER.clear(); LAST_UP.clear(); FRAME.clear();
+        QUADS.clear();
+        VER.clear();
+        LAST_UP.clear();
+        FRAME.clear();
     }
 }

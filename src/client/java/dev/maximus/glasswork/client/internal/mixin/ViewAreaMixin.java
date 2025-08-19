@@ -39,10 +39,10 @@ public abstract class ViewAreaMixin {
 
         SectionPos sec = SectionPos.of(x, y, z);
 
-        // Only clear Glasswork state. DO NOT touch VBOs or compiled section here.
-        GlassworkAPI._clearSection(sec);
         TranslucentMeshStore.clear(sec.origin());
 
-        // (No bufferMap.remove, no compiled reset.)
+        GlassworkAPI._bumpGeneration(sec);
+
+        GlassworkAPI._clearSection(sec);
     }
 }

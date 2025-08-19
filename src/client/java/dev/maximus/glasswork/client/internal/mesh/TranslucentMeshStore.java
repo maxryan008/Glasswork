@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TranslucentMeshStore {
     public static final class TrackedMesh {
         private final MeshData mesh;
-        private final ByteBufferBuilder builder; // may be null if wrapping foreign data
+        private final ByteBufferBuilder builder;
 
         public TrackedMesh(MeshData mesh, ByteBufferBuilder builder) {
             this.mesh = mesh;
@@ -27,7 +27,6 @@ public final class TranslucentMeshStore {
 
     private TranslucentMeshStore() {}
 
-    /** Clone vanilla translucent mesh so we own its memory. */
     public static void storeOrRemove(BlockPos origin, MeshData mesh) {
         BlockPos key = origin.immutable();
         TrackedMesh old = STORE.remove(key);
@@ -63,7 +62,6 @@ public final class TranslucentMeshStore {
         STORE.clear();
     }
 
-    /** Merge two meshes with identical format/mode. Returns new tracked mesh (caller must close). */
     public static TrackedMesh merge(TrackedMesh a, MeshData b) {
         if (a == null) return new TrackedMesh(b, null);
 
@@ -93,7 +91,7 @@ public final class TranslucentMeshStore {
         MeshData.DrawState mergedDraw = new MeshData.DrawState(
                 format,
                 aVerts + bVerts,
-                ad.indexCount() + (bVerts / 4 * 6), // nominal index count for quads
+                ad.indexCount() + (bVerts / 4 * 6),
                 ad.mode(),
                 ad.indexType()
         );
