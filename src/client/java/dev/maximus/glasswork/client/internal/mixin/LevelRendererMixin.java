@@ -99,15 +99,14 @@ public class LevelRendererMixin {
             }
 
             if (injected != null) {
-                final TranslucentMeshStore.TrackedMesh mergedTracked =
-                        TranslucentMeshStore.merge(tracked, injected);
+                final TranslucentMeshStore.TrackedMesh mergedTracked = TranslucentMeshStore.merge(tracked, injected);
                 final MeshData merged = mergedTracked.mesh();
 
                 final SectionRenderDispatcher dispatcher = this.minecraft.levelRenderer.getSectionRenderDispatcher();
                 final var fixed = ((SectionRenderDispatcherAccessor) dispatcher).getFixedBuffers();
                 final Vec3 cam = this.minecraft.gameRenderer.getMainCamera().getPosition();
 
-                merged.sortQuads(
+                final MeshData.SortState sortState = merged.sortQuads(
                         fixed.buffer(RenderType.translucent()),
                         VertexSorting.byDistance(
                                 (float) (cam.x - origin.getX()),
@@ -127,6 +126,15 @@ public class LevelRendererMixin {
                 if (map.get(RenderType.translucent()) == null) {
                     map.put(RenderType.translucent(), vbo);
                 }
+
+                SectionRenderDispatcher.CompiledSection compiled = section.getCompiled();
+                if (((CompiledSectionAccessor) compiled).getHasBlocks().isEmpty()) {
+                    SectionRenderDispatcher.CompiledSection fresh = new SectionRenderDispatcher.CompiledSection();
+                    ((RenderSectionAccessor) section).invokeSetCompiled(fresh);
+                    compiled = fresh;
+                }
+                ((CompiledSectionAccessor) compiled).getHasBlocks().add(RenderType.translucent());
+                ((CompiledSectionAccessor) compiled).setTransparencyState(sortState);
 
                 GlassworkAPI._markUploaded(sectionPos);
                 injected.close();
