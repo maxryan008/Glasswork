@@ -38,7 +38,7 @@ public final class TranslucentMeshStore {
         STORE.put(key, deepCopy(mesh));
     }
 
-    public static void replace(BlockPos origin, MeshData fresh) {
+    public static void replace(BlockPos origin, @Nullable MeshData fresh) {
         origin = origin.immutable();
         if (fresh == null) { clear(origin); return; }
         TrackedMesh old = STORE.put(origin, deepCopy(fresh));
@@ -83,8 +83,11 @@ public final class TranslucentMeshStore {
         STORE.clear();
     }
 
-    public static TrackedMesh merge(TrackedMesh a, MeshData b) {
-        if (a == null) return new TrackedMesh(b, null);
+    public static TrackedMesh merge(@Nullable TrackedMesh a, MeshData b) {
+        if (a == null) {
+            // own a copy of b so we never rely on the caller keeping b alive
+            return deepCopy(b);
+        }
 
         MeshData am = a.mesh();
         MeshData.DrawState ad = am.drawState();
@@ -94,15 +97,23 @@ public final class TranslucentMeshStore {
         if (!format.equals(bd.format())) throw new IllegalStateException("Vertex formats differ");
         if (ad.mode() != bd.mode()) throw new IllegalStateException("Vertex modes differ");
 
+        ByteBuffer abuf;
+        try {
+            abuf = am.vertexBuffer();  // may throw if stale
+        } catch (IllegalStateException e) {
+            return deepCopy(b);        // tracked went stale; own b safely
+        }
+        ByteBuffer bbuf = b.vertexBuffer();
+
         int vertexSize = format.getVertexSize();
         int aVerts = ad.vertexCount();
         int bVerts = bd.vertexCount();
         int aBytes = aVerts * vertexSize;
         int bBytes = bVerts * vertexSize;
 
-        ByteBuffer abuf = am.vertexBuffer();
-        ByteBuffer bbuf = b.vertexBuffer();
-        if (abuf.remaining() < aBytes || bbuf.remaining() < bBytes) throw new IllegalStateException("Insufficient buffer data");
+        if (abuf.remaining() < aBytes || bbuf.remaining() < bBytes) {
+            return deepCopy(b); // corrupt sizes; bail safely
+        }
 
         ByteBufferBuilder builder = new ByteBufferBuilder(aBytes + bBytes);
         long dest = builder.reserve(aBytes + bBytes);

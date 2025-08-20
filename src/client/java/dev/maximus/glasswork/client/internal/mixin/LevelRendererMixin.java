@@ -101,9 +101,16 @@ public class LevelRendererMixin {
 
         TranslucentMeshStore.TrackedMesh mergedTracked = null;
         MeshData merged = injected;
+
         if (tracked != null) {
-            mergedTracked = TranslucentMeshStore.merge(tracked, injected);
-            merged = mergedTracked.mesh();
+            try {
+                mergedTracked = TranslucentMeshStore.merge(tracked, injected);
+                merged = mergedTracked.mesh();
+            } catch (IllegalStateException ex) {
+                // tracked went stale between capture and render; ignore it
+                mergedTracked = null;
+                merged = injected;
+            }
         }
 
         final SectionRenderDispatcher dispatcher = this.minecraft.levelRenderer.getSectionRenderDispatcher();
