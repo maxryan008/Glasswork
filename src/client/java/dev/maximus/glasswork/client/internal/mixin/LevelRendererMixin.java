@@ -38,15 +38,17 @@ public class LevelRendererMixin {
                                               RenderType layer,
                                               @Local SectionRenderDispatcher.RenderSection section) {
         boolean vanillaEmpty = !((CompiledSectionAccessor) compiled).getHasBlocks().contains(layer);
+        if (layer != RenderType.translucent() || section == null) return vanillaEmpty;
 
-        if (layer != RenderType.translucent() || !vanillaEmpty || section == null) {
-            return vanillaEmpty;
-        }
+        if (!vanillaEmpty) return false;
 
         SectionPos sec = SectionPos.of(section.getOrigin());
-        boolean haveQuads = !GlassworkAPI._getQuads(sec).isEmpty();
+        boolean haveQuads   = !GlassworkAPI._getQuads(sec).isEmpty();
+        boolean haveVbo     = ((RenderSectionAccessor) section).getBufferMap().get(RenderType.translucent()) != null;
+        boolean haveTracked = TranslucentMeshStore.get(section.getOrigin()) != null;
+        boolean needsUpload = GlassworkAPI._needsUpload(sec);
 
-        return !haveQuads;
+        return !(haveQuads && (haveTracked || haveVbo || needsUpload));
     }
 
     @Redirect(
@@ -57,91 +59,98 @@ public class LevelRendererMixin {
             )
     )
     private VertexBuffer glasswork$redirectGetBuffer(SectionRenderDispatcher.RenderSection section, RenderType layer) {
-        if (layer != RenderType.translucent()) {
+        if (layer != RenderType.translucent() || this.minecraft.level == null) {
             return (VertexBuffer) ((RenderSectionAccessor) section).getBufferMap().get(layer);
         }
 
-        if (this.minecraft.level == null) {
-            return (VertexBuffer) ((RenderSectionAccessor) section).getBufferMap().get(layer);
+        final BlockPos origin   = section.getOrigin();
+        final SectionPos secPos = SectionPos.of(origin);
+
+        final List<InjectedQuad> quads = GlassworkAPI._getQuads(secPos);
+
+        Map<RenderType, VertexBuffer> map = ((RenderSectionAccessor) section).getBufferMap();
+        VertexBuffer vanillaVbo = map.get(RenderType.translucent());
+        if (quads.isEmpty()) return vanillaVbo;
+
+        final TranslucentMeshStore.TrackedMesh tracked = TranslucentMeshStore.get(origin);
+
+        final VertexFormat fmt         = (tracked != null) ? tracked.mesh().drawState().format() : DefaultVertexFormat.BLOCK;
+        final VertexFormat.Mode mode   = (tracked != null) ? tracked.mesh().drawState().mode()   : VertexFormat.Mode.QUADS;
+        final int estimate = Math.max(1024, quads.size() * 4 * fmt.getVertexSize());
+
+        ByteBufferBuilder bytes = new ByteBufferBuilder(estimate);
+        MeshData injected;
+        try {
+            BufferBuilder builder = new BufferBuilder(bytes, mode, fmt);
+            for (InjectedQuad q : quads) {
+                QuadVertex[] vs = { q.v1(), q.v2(), q.v3(), q.v4() };
+                for (QuadVertex v : vs) {
+                    builder.addVertex(v.x() - origin.getX(), v.y() - origin.getY(), v.z() - origin.getZ())
+                            .setColor(v.color())
+                            .setUv(v.u(), v.v())
+                            .setOverlay(v.overlay())
+                            .setLight(v.light())
+                            .setNormal(v.nx(), v.ny(), v.nz());
+                }
+            }
+            injected = builder.buildOrThrow();
+        } catch (Throwable t) {
+            bytes.close();
+            return vanillaVbo;
         }
 
-        final BlockPos origin = section.getOrigin();
-        final SectionPos sectionPos = SectionPos.of(origin);
-
-        final List<InjectedQuad> quads = GlassworkAPI._getQuads(sectionPos);
-        if (!quads.isEmpty() && GlassworkAPI._needsUpload(sectionPos)) {
-            final TranslucentMeshStore.TrackedMesh tracked = TranslucentMeshStore.get(origin);
-
-            final VertexFormat format = (tracked != null) ? tracked.mesh().drawState().format() : DefaultVertexFormat.BLOCK;
-            final VertexFormat.Mode mode = (tracked != null) ? tracked.mesh().drawState().mode()   : VertexFormat.Mode.QUADS;
-
-            final int estimate = Math.max(1024, quads.size() * 4 * format.getVertexSize());
-            final ByteBufferBuilder bytes = new ByteBufferBuilder(estimate);
-            final BufferBuilder builder   = new BufferBuilder(bytes, mode, format);
-
-            MeshData injected = null;
-            try {
-                for (InjectedQuad q : quads) {
-                    QuadVertex[] vs = { q.v1(), q.v2(), q.v3(), q.v4() };
-                    for (QuadVertex v : vs) {
-                        builder.addVertex(v.x() - origin.getX(), v.y() - origin.getY(), v.z() - origin.getZ())
-                                .setColor(v.color())
-                                .setUv(v.u(), v.v())
-                                .setOverlay(v.overlay())
-                                .setLight(v.light())
-                                .setNormal(v.nx(), v.ny(), v.nz());
-                    }
-                }
-                injected = builder.buildOrThrow();
-            } catch (Exception e) {
-                bytes.close();
-                injected = null;
-            }
-
-            if (injected != null) {
-                final TranslucentMeshStore.TrackedMesh mergedTracked = TranslucentMeshStore.merge(tracked, injected);
-                final MeshData merged = mergedTracked.mesh();
-
-                final SectionRenderDispatcher dispatcher = this.minecraft.levelRenderer.getSectionRenderDispatcher();
-                final var fixed = ((SectionRenderDispatcherAccessor) dispatcher).getFixedBuffers();
-                final Vec3 cam = this.minecraft.gameRenderer.getMainCamera().getPosition();
-
-                final MeshData.SortState sortState = merged.sortQuads(
-                        fixed.buffer(RenderType.translucent()),
-                        VertexSorting.byDistance(
-                                (float) (cam.x - origin.getX()),
-                                (float) (cam.y - origin.getY()),
-                                (float) (cam.z - origin.getZ())
-                        )
-                );
-
-                final Map<RenderType, VertexBuffer> map = ((RenderSectionAccessor) section).getBufferMap();
-                VertexBuffer vbo = map.get(RenderType.translucent());
-                if (vbo == null) vbo = new VertexBuffer(VertexBuffer.Usage.STATIC);
-
-                vbo.bind();
-                vbo.upload(merged);
-                VertexBuffer.unbind();
-
-                if (map.get(RenderType.translucent()) == null) {
-                    map.put(RenderType.translucent(), vbo);
-                }
-
-                SectionRenderDispatcher.CompiledSection compiled = section.getCompiled();
-                if (((CompiledSectionAccessor) compiled).getHasBlocks().isEmpty()) {
-                    SectionRenderDispatcher.CompiledSection fresh = new SectionRenderDispatcher.CompiledSection();
-                    ((RenderSectionAccessor) section).invokeSetCompiled(fresh);
-                    compiled = fresh;
-                }
-                ((CompiledSectionAccessor) compiled).getHasBlocks().add(RenderType.translucent());
-                ((CompiledSectionAccessor) compiled).setTransparencyState(sortState);
-
-                GlassworkAPI._markUploaded(sectionPos);
-                injected.close();
-                mergedTracked.close();
-            }
+        TranslucentMeshStore.TrackedMesh mergedTracked = null;
+        MeshData merged = injected;
+        if (tracked != null) {
+            mergedTracked = TranslucentMeshStore.merge(tracked, injected);
+            merged = mergedTracked.mesh();
         }
 
-        return (VertexBuffer) ((RenderSectionAccessor) section).getBufferMap().get(layer);
+        final SectionRenderDispatcher dispatcher = this.minecraft.levelRenderer.getSectionRenderDispatcher();
+        final var fixed = ((SectionRenderDispatcherAccessor) dispatcher).getFixedBuffers();
+        final Vec3 cam = this.minecraft.gameRenderer.getMainCamera().getPosition();
+
+        MeshData.SortState sortState = merged.sortQuads(
+                fixed.buffer(RenderType.translucent()),
+                VertexSorting.byDistance(
+                        (float) (cam.x - origin.getX()),
+                        (float) (cam.y - origin.getY()),
+                        (float) (cam.z - origin.getZ())
+                )
+        );
+
+        boolean needClone = (map == java.util.Collections.EMPTY_MAP) || !(map instanceof java.util.HashMap);
+        if (needClone) {
+            map = new java.util.HashMap<>(map);
+            ((RenderSectionAccessor) section).setBufferMap(map);
+            vanillaVbo = map.get(RenderType.translucent());
+        }
+
+        VertexBuffer vbo = (vanillaVbo != null) ? vanillaVbo : new VertexBuffer(VertexBuffer.Usage.STATIC);
+        try {
+            vbo.bind();
+            vbo.upload(merged);
+        } finally {
+            VertexBuffer.unbind();
+        }
+        if (vanillaVbo == null) map.put(RenderType.translucent(), vbo);
+
+        SectionRenderDispatcher.CompiledSection compiled = section.getCompiled();
+        if (compiled == null || ((CompiledSectionAccessor) compiled).getHasBlocks().isEmpty()) {
+            SectionRenderDispatcher.CompiledSection fresh = new SectionRenderDispatcher.CompiledSection();
+            ((RenderSectionAccessor) section).invokeSetCompiled(fresh);
+            compiled = fresh;
+        }
+        ((CompiledSectionAccessor) compiled).getHasBlocks().add(RenderType.translucent());
+        ((CompiledSectionAccessor) compiled).setTransparencyState(sortState);
+
+        GlassworkAPI._markUploaded(secPos);
+        if (mergedTracked != null) {
+            try { mergedTracked.close(); } finally { injected.close(); }
+        } else {
+            injected.close();
+        }
+
+        return vbo;
     }
 }

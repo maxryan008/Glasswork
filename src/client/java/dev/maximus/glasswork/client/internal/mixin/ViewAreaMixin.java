@@ -39,10 +39,9 @@ public abstract class ViewAreaMixin {
 
         SectionPos sec = SectionPos.of(x, y, z);
 
-        TranslucentMeshStore.clear(sec.origin());
+        TranslucentMeshStore.markDirty(sec.origin());
 
         GlassworkAPI._bumpGeneration(sec);
-
         GlassworkAPI._clearSection(sec);
     }
 }

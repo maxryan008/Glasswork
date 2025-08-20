@@ -1,7 +1,13 @@
 package dev.maximus.glasswork.api;
 
+import dev.maximus.glasswork.net.GlassworkPackets;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 
 import java.util.*;
@@ -40,6 +46,26 @@ public final class GlassworkAPI {
         QUADS.remove(section);
         VER.remove(section);
         LAST_UP.remove(section);
+    }
+
+    /** Server helper: broadcast PUT to clients tracking this section's chunk. */
+    public static void serverPut(ServerLevel level, SectionPos section, Collection<InjectedQuad> quads) {
+        if (section == null) return;
+        var payload = new GlassworkPackets.PutQuads(section, List.copyOf(quads));
+        var chunk = new ChunkPos(section.x(), section.z());
+        for (ServerPlayer p : PlayerLookup.tracking(level, chunk)) {
+            ServerPlayNetworking.send(p, payload);
+        }
+    }
+
+    /** Server helper: broadcast REMOVE to clients tracking this section's chunk. */
+    public static void serverRemoveAll(ServerLevel level, SectionPos section) {
+        if (section == null) return;
+        var payload = new GlassworkPackets.RemoveQuads(section);
+        var chunk = new ChunkPos(section.x(), section.z());
+        for (ServerPlayer p : PlayerLookup.tracking(level, chunk)) {
+            ServerPlayNetworking.send(p, payload);
+        }
     }
 
     /** Convenience to compute section from block pos. */

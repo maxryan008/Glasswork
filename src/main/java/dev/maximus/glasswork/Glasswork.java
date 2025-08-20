@@ -1,13 +1,9 @@
 package dev.maximus.glasswork;
 
 import com.mojang.logging.LogUtils;
-import dev.maximus.glasswork.api.GlassworkAPI;
+import dev.maximus.glasswork.net.GlassworkNet;
 import net.fabricmc.api.ModInitializer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
-
-import java.util.List;
 
 public class Glasswork implements ModInitializer {
     public static final String MOD_ID = "glasswork";
@@ -16,5 +12,6 @@ public class Glasswork implements ModInitializer {
     @Override
     public void onInitialize() {
         LOG.info("Initializing Glasswork");
+        GlassworkNet.registerCommon();
     }
 }
