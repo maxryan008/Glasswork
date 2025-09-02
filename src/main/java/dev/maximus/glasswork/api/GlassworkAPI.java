@@ -71,11 +71,11 @@ public final class GlassworkAPI {
      */
     public static void put(Level level, SectionPos section, Collection<InjectedQuad> quads) {
         if (section == null) {
-            Log.w("[api.put] section=null (level=%s) -> no-op", level);
+            Log.w("[api.put] section=null (level={}) -> no-op", level);
             return;
         }
         if (quads == null || quads.isEmpty()) {
-            Log.d("[api.put] empty input -> removeAll for section=%s", section);
+            Log.d("[api.put] empty input -> removeAll for section={}", section);
             removeAll(level, section);
             return;
         }
@@ -85,17 +85,17 @@ public final class GlassworkAPI {
         ArrayList<InjectedQuad> clean = new ArrayList<>(in);
         for (InjectedQuad q : quads) if (q != null) clean.add(q);
         if (clean.isEmpty()) {
-            Log.w("[api.put] all quads null -> removeAll for section=%s (input=%d)", section, in);
+            Log.w("[api.put] all quads null -> removeAll for section={} (input={})", section, in);
             removeAll(level, section);
             return;
         }
         if (clean.size() != in) {
-            Log.w("[api.put] discarded %d null quad(s) (kept=%d) for section=%s", (in - clean.size()), clean.size(), section);
+            Log.w("[api.put] discarded {} null quad(s) (kept={}) for section={}", (in - clean.size()), clean.size(), section);
         }
 
         QUADS.put(section, List.copyOf(clean));
         _bumpGeneration(section);
-        Log.d("[api.put] stored=%d quads section=%s gen=%d", clean.size(), section, VER.get(section));
+        Log.d("[api.put] stored={} quads section={} gen={}", clean.size(), section, VER.get(section));
     }
 
     /**
@@ -106,13 +106,13 @@ public final class GlassworkAPI {
      */
     public static void removeAll(Level level, SectionPos section) {
         if (section == null) {
-            Log.w("[api.removeAll] section=null (level=%s) -> no-op", level);
+            Log.w("[api.removeAll] section=null (level={}) -> no-op", level);
             return;
         }
         QUADS.remove(section);
         VER.remove(section);
         LAST_UP.remove(section);
-        Log.d("[api.removeAll] cleared section=%s", section);
+        Log.d("[api.removeAll] cleared section={}", section);
     }
 
     /**
@@ -131,11 +131,11 @@ public final class GlassworkAPI {
             return;
         }
         if (level == null) {
-            Log.e("[api.serverPut] level=null for section=%s -> no-op", section);
+            Log.e("[api.serverPut] level=null for section={} -> no-op", section);
             return;
         }
         if (quads == null || quads.isEmpty()) {
-            Log.w("[api.serverPut] empty quads for section=%s -> consider serverRemoveAll instead", section);
+            Log.w("[api.serverPut] empty quads for section={} -> consider serverRemoveAll instead", section);
         }
 
         // sanitize nulls to avoid codec surprises
@@ -151,10 +151,10 @@ public final class GlassworkAPI {
                 sent++;
                 GlassworkMetrics.recordServerPut(p.getGameProfile().getName(), clean.size()); // <--- add
             } catch (Throwable t) {
-                Log.e(t, "[api.serverPut] failed to send PutQuads to %s section=%s", p.getGameProfile().getName(), section);
+                Log.e(t, "[api.serverPut] failed to send PutQuads to {} section={}", p.getGameProfile().getName(), section);
             }
         }
-        Log.i("[api.serverPut] section=%s quads=%d recipients=%d (~%d B)", section, clean.size(), sent,
+        Log.i("[api.serverPut] section={} quads={} recipients={} (~{} B)", section, clean.size(), sent,
                 GlassworkMetrics.estimateBytesForQuads(clean));
     }
 
@@ -170,7 +170,7 @@ public final class GlassworkAPI {
             return;
         }
         if (level == null) {
-            Log.e("[api.serverRemoveAll] level=null for section=%s -> no-op", section);
+            Log.e("[api.serverRemoveAll] level=null for section={} -> no-op", section);
             return;
         }
 
@@ -183,10 +183,10 @@ public final class GlassworkAPI {
                 sent++;
                 GlassworkMetrics.recordServerRemove(p.getGameProfile().getName()); // <--- add
             } catch (Throwable t) {
-                Log.e(t, "[api.serverRemoveAll] failed to send RemoveQuads to %s section=%s", p.getGameProfile().getName(), section);
+                Log.e(t, "[api.serverRemoveAll] failed to send RemoveQuads to {} section={}", p.getGameProfile().getName(), section);
             }
         }
-        Log.i("[api.serverRemoveAll] section=%s recipients=%d", section, sent);
+        Log.i("[api.serverRemoveAll] section={} recipients={}", section, sent);
     }
 
     /**

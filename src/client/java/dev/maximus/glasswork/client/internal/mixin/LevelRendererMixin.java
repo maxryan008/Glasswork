@@ -64,7 +64,7 @@ public class LevelRendererMixin {
 
         // Non-empty if we either have quads and (somewhere to put them OR need to upload)
         final boolean nonEmpty = haveQuads && (haveTracked || haveVbo || needsUpload);
-        Log.t("[mixin.isEmpty] sec=%s quads=%s vbo=%s tracked=%s needsUp=%s -> nonEmpty=%s",
+        Log.t("[mixin.isEmpty] sec={} quads={} vbo={} tracked={} needsUp={} -> nonEmpty={}",
                 sec, haveQuads, haveVbo, haveTracked, needsUpload, nonEmpty);
 
         return !nonEmpty;
@@ -130,7 +130,7 @@ public class LevelRendererMixin {
                     merged = mergedTracked.mesh();
                 } catch (Throwable mergeErr) {
                     // merge() logs specifics; fall back to just our injected mesh
-                    Log.w("[mixin.getBuffer] merge failed sec=%s: %s", secPos, mergeErr.getMessage());
+                    Log.w("[mixin.getBuffer] merge failed sec={}: {}", secPos, mergeErr.getMessage());
                     mergedTracked = null;
                     merged = injected;
                 }
@@ -181,29 +181,29 @@ public class LevelRendererMixin {
             // 7) Mark uploaded → prevents repeat work until version bumps
             GlassworkAPI._markUploaded(secPos);
 
-            Log.d("[mixin.getBuffer] uploaded sec=%s quads=%d mode=%s fmt=%s", secPos, quads.size(), mode, fmt);
+            Log.d("[mixin.getBuffer] uploaded sec={} quads={} mode={} fmt={}", secPos, quads.size(), mode, fmt);
             return vbo;
 
         } catch (Throwable t) {
             // Any failure → fall back to vanilla VBO; keep the frame alive
-            Log.e(t, "[mixin.getBuffer] upload failed sec=%s (returning vanilla VBO)", secPos);
+            Log.e(t, "[mixin.getBuffer] upload failed sec={} (returning vanilla VBO)", secPos);
             return vanillaVbo;
         } finally {
             // Free temporary/merged native buffers
             try {
                 if (mergedTracked != null) mergedTracked.close();
             } catch (Throwable closeErr) {
-                Log.d("[mixin.getBuffer] mergedTracked.close() failed: %s", closeErr.getMessage());
+                Log.d("[mixin.getBuffer] mergedTracked.close() failed: {}", closeErr.getMessage());
             }
             try {
                 if (injected != null) injected.close();
             } catch (Throwable closeErr) {
-                Log.d("[mixin.getBuffer] injected.close() failed: %s", closeErr.getMessage());
+                Log.d("[mixin.getBuffer] injected.close() failed: {}", closeErr.getMessage());
             }
             try {
                 if (backing != null) backing.close();
             } catch (Throwable closeErr) {
-                Log.d("[mixin.getBuffer] backing.close() failed: %s", closeErr.getMessage());
+                Log.d("[mixin.getBuffer] backing.close() failed: {}", closeErr.getMessage());
             }
         }
     }

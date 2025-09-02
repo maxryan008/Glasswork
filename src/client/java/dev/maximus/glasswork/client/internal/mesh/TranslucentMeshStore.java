@@ -39,20 +39,20 @@ public final class TranslucentMeshStore {
         final TrackedMesh old = STORE.remove(key);
         if (old != null) {
             old.close();
-            Log.d("[mesh.storeOrRemove] freed previous mesh @%s", key);
+            Log.d("[mesh.storeOrRemove] freed previous mesh @{}", key);
         }
 
         if (mesh == null) {
             DIRTY.remove(key);
             GlassworkMetrics.recordClientMeshRemove(0, 1);
-            Log.d("[mesh.storeOrRemove] removed mesh @%s", key);
+            Log.d("[mesh.storeOrRemove] removed mesh @{}", key);
             return;
         }
 
         final TrackedMesh copy = deepCopy(mesh);
         STORE.put(key, copy);
         GlassworkMetrics.recordClientMeshStore(sizeOf(mesh), sizeOf(copy.mesh()));
-        Log.d("[mesh.storeOrRemove] stored mesh @%s bytes=%d", key, sizeOf(copy.mesh()));
+        Log.d("[mesh.storeOrRemove] stored mesh @{} bytes={}", key, sizeOf(copy.mesh()));
     }
 
     /**
@@ -77,7 +77,7 @@ public final class TranslucentMeshStore {
         DIRTY.remove(origin);
 
         GlassworkMetrics.recordClientMeshReplace(sizeOf(fresh), sizeOf(copy.mesh()));
-        Log.d("[mesh.replace] replaced mesh @%s bytes=%d", origin, sizeOf(copy.mesh()));
+        Log.d("[mesh.replace] replaced mesh @{} bytes={}", origin, sizeOf(copy.mesh()));
     }
 
     /** Get the tracked mesh for {@code origin} (do not close it). */
@@ -90,7 +90,7 @@ public final class TranslucentMeshStore {
     public static void markDirty(BlockPos origin) {
         if (origin == null) return;
         DIRTY.add(origin.immutable());
-        Log.t("[mesh.markDirty] %s", origin);
+        Log.t("[mesh.markDirty] {}", origin);
     }
 
     /**
@@ -115,7 +115,7 @@ public final class TranslucentMeshStore {
             return new TrackedMesh(copy, builder);
         } catch (Throwable t) {
             // Fallback: valid MeshData with zero bytes; avoids crashes downstream.
-            Log.w("[mesh.deepCopy] failed (%s) -> returning zero-length mesh", t.getMessage());
+            Log.w("[mesh.deepCopy] failed ({}) -> returning zero-length mesh", t.getMessage());
             final ByteBufferBuilder builder = new ByteBufferBuilder(0);
             builder.reserve(0);
             final MeshData copy = new MeshData(
@@ -136,7 +136,7 @@ public final class TranslucentMeshStore {
             final int bytes = sizeOf(t.mesh());
             t.close();
             GlassworkMetrics.recordClientMeshRemove(bytes, 1);
-            Log.d("[mesh.clear] cleared mesh @%s bytesFreed=%d", origin, bytes);
+            Log.d("[mesh.clear] cleared mesh @{} bytesFreed={}", origin, bytes);
         }
     }
 
@@ -152,7 +152,7 @@ public final class TranslucentMeshStore {
         }
         STORE.clear();
         GlassworkMetrics.recordClientMeshRemove(totalBytes, count);
-        Log.d("[mesh.clearAll] cleared %d meshes, bytesFreed=%d", count, totalBytes);
+        Log.d("[mesh.clearAll] cleared {} meshes, bytesFreed={}", count, totalBytes);
     }
 
     /**
@@ -176,12 +176,12 @@ public final class TranslucentMeshStore {
 
         final VertexFormat format = ad.format();
         if (!format.equals(bd.format())) {
-            Log.e("[mesh.merge] Vertex formats differ: a=%s b=%s -> copy(b)", ad.format(), bd.format());
+            Log.e("[mesh.merge] Vertex formats differ: a={} b={} -> copy(b)", ad.format(), bd.format());
             GlassworkMetrics.recordClientMeshMergeError("format_mismatch");
             return deepCopy(b);
         }
         if (ad.mode() != bd.mode()) {
-            Log.e("[mesh.merge] Draw modes differ: a=%s b=%s -> copy(b)", ad.mode(), bd.mode());
+            Log.e("[mesh.merge] Draw modes differ: a={} b={} -> copy(b)", ad.mode(), bd.mode());
             GlassworkMetrics.recordClientMeshMergeError("mode_mismatch");
             return deepCopy(b);
         }
@@ -190,7 +190,7 @@ public final class TranslucentMeshStore {
         try {
             abuf = am.vertexBuffer();  // may throw if stale
         } catch (IllegalStateException e) {
-            Log.w("[mesh.merge] stale a.vertexBuffer(): %s -> copy(b)", e.getMessage());
+            Log.w("[mesh.merge] stale a.vertexBuffer(): {} -> copy(b)", e.getMessage());
             GlassworkMetrics.recordClientMeshMergeError("stale_a");
             return deepCopy(b);        // tracked went stale; own b safely
         }
@@ -203,7 +203,7 @@ public final class TranslucentMeshStore {
         final int bBytes = bVerts * vertexSize;
 
         if (abuf.remaining() < aBytes || bbuf.remaining() < bBytes) {
-            Log.e("[mesh.merge] corrupt sizes: aRem=%d aBytes=%d bRem=%d bBytes=%d -> copy(b)",
+            Log.e("[mesh.merge] corrupt sizes: aRem={} aBytes={} bRem={} bBytes={} -> copy(b)",
                     abuf.remaining(), aBytes, bbuf.remaining(), bBytes);
             GlassworkMetrics.recordClientMeshMergeError("size_mismatch");
             return deepCopy(b);
@@ -228,7 +228,7 @@ public final class TranslucentMeshStore {
         final MeshData merged = new MeshData(builder.build(), mergedDraw);
         final TrackedMesh out = new TrackedMesh(merged, builder);
         GlassworkMetrics.recordClientMeshMerge(aBytes, bBytes, aBytes + bBytes);
-        Log.d("[mesh.merge] merged a(%d B)+b(%d B) -> %d verts @%d B", aBytes, bBytes, mergedVerts, aBytes + bBytes);
+        Log.d("[mesh.merge] merged a({} B)+b({} B) -> {} verts @{} B", aBytes, bBytes, mergedVerts, aBytes + bBytes);
         return out;
     }
 
@@ -237,7 +237,7 @@ public final class TranslucentMeshStore {
         try {
             return mesh.vertexBuffer().remaining();
         } catch (Throwable t) {
-            Log.d("[mesh.sizeOf] failed to read size: %s", t.getMessage());
+            Log.d("[mesh.sizeOf] failed to read size: {}", t.getMessage());
             return 0;
         }
     }

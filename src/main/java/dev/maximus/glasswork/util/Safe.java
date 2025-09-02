@@ -15,7 +15,7 @@ public final class Safe {
         try {
             r.run();
         } catch (Throwable t) {
-            Log.e(t, "[safe] Uncaught error during: %s", what);
+            Log.e(t, "[safe] Uncaught error during: {}", what);
         }
     }
 
@@ -24,7 +24,7 @@ public final class Safe {
         try {
             return c.call();
         } catch (Throwable t) {
-            Log.e(t, "[safe] Uncaught error during: %s (returning fallback)", what);
+            Log.e(t, "[safe] Uncaught error during: {} (returning fallback)", what);
             return fallback;
         }
     }

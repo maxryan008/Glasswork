@@ -21,9 +21,9 @@ public final class Timing implements AutoCloseable {
         if (!isTraceEnabled()) return;
         long us = (System.nanoTime() - startNs) / 1000;
         if (us > warnBudgetUs) {
-            w("[timing] %s took %d µs (> %d µs)", name, us, warnBudgetUs);
+            w("[timing] {} took {} µs (> {} µs)", name, us, warnBudgetUs);
         } else {
-            t("[timing] %s took %d µs", name, us);
+            t("[timing] {} took {} µs", name, us);
         }
     }
 }

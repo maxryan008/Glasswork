@@ -47,6 +47,6 @@ public final class GlassworkClient implements ClientModInitializer {
                 GlassworkAPI:: _internalClearAll);
         Safe.run("clearClientState[" + reason + "]:TranslucentMeshStore.clearAll",
                 TranslucentMeshStore::clearAll);
-        Log.d("[lifecycle] Client state cleared (%s)", reason);
+        Log.d("[lifecycle] Client state cleared ({})", reason);
     }
 }
