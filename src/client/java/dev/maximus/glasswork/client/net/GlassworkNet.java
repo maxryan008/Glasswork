@@ -7,7 +7,9 @@ import net.minecraft.client.Minecraft;
 
 public class GlassworkNet {
 
-    /** Call from client init. */
+    /**
+     * Call from client init.
+     */
     public static void registerClientReceivers() {
         ClientPlayNetworking.registerGlobalReceiver(GlassworkPackets.PutQuads.TYPE, (payload, ctx) -> {
             var sec = payload.section();

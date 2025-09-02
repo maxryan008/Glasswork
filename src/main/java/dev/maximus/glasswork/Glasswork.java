@@ -1,17 +1,21 @@
 package dev.maximus.glasswork;
 
-import com.mojang.logging.LogUtils;
+import dev.maximus.glasswork.commands.GlassworkServerCommands;
 import dev.maximus.glasswork.net.GlassworkNet;
+import dev.maximus.glasswork.util.Log;
+import dev.maximus.glasswork.util.Safe;
 import net.fabricmc.api.ModInitializer;
-import org.slf4j.Logger;
 
-public class Glasswork implements ModInitializer {
+public final class Glasswork implements ModInitializer {
     public static final String MOD_ID = "glasswork";
-    public static final Logger LOG = LogUtils.getLogger();
 
     @Override
     public void onInitialize() {
-        LOG.info("Initializing Glasswork");
-        GlassworkNet.registerCommon();
+        Log.i("[boot] {} initializing (common/server)", MOD_ID);
+
+        Safe.run("registerCommonNetwork", GlassworkNet::registerCommon);
+        Safe.run("registerServerCommands", GlassworkServerCommands::register);
+
+        Log.i("[boot] {} initialized (common/server)", MOD_ID);
     }
 }

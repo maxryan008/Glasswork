@@ -5,4 +5,5 @@ public record InjectedQuad(
         QuadVertex v2,
         QuadVertex v3,
         QuadVertex v4
-) {}
+) {
+}

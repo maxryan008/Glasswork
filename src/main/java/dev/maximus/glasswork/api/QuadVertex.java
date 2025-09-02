@@ -5,4 +5,5 @@ public record QuadVertex(
         float u, float v,
         int color, int light, int overlay,
         float nx, float ny, float nz
-) {}
+) {
+}

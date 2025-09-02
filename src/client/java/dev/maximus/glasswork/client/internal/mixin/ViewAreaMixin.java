@@ -1,10 +1,8 @@
 package dev.maximus.glasswork.client.internal.mixin;
 
-import com.mojang.blaze3d.vertex.VertexBuffer;
 import dev.maximus.glasswork.api.GlassworkAPI;
 import dev.maximus.glasswork.client.internal.mesh.TranslucentMeshStore;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.core.SectionPos;
