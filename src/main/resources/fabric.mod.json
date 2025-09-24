@@ -3,20 +3,15 @@
   "id": "glasswork",
   "version": "${version}",
   "name": "Glasswork",
-  "description": "Section-layer translucent quad injection API.",
-  "authors": [
-    "maxryan008"
-  ],
+  "description": "Section-layer translucent quad injection API (pure client-side).",
+  "authors": ["maxryan008"],
   "contact": {},
   "license": "All-Rights-Reserved",
   "icon": "assets/glasswork/icon.png",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
     "client": [
       "dev.maximus.glasswork.client.GlassworkClient"
-    ],
-    "main": [
-      "dev.maximus.glasswork.Glasswork"
     ]
   },
   "mixins": [
